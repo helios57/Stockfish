@@ -118,9 +118,14 @@ AccumulatorStack::mut_accumulators() noexcept {
         return threat_accumulators;
 }
 
+#include <iostream>
+
 void AccumulatorStack::reset() noexcept {
+    std::cerr << "AccumulatorStack::reset enter" << std::endl;
     psq_accumulators[0].reset({});
+    std::cerr << "AccumulatorStack::reset psq done" << std::endl;
     threat_accumulators[0].reset({});
+    std::cerr << "AccumulatorStack::reset threat done" << std::endl;
     size = 1;
 }
 

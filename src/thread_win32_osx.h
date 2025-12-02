@@ -61,6 +61,8 @@ class NativeThread {
     }
 
     void join() { pthread_join(thread, nullptr); }
+
+    pthread_t get_id() const { return thread; }
 };
 
 }  // namespace Stockfish

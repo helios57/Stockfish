@@ -84,7 +84,12 @@ Thread::~Thread() {
 // Wakes up the thread that will start the search
 void Thread::start_searching() {
     assert(worker != nullptr);
-    run_custom_job([this]() { worker->start_searching(); });
+    std::cerr << "Thread::start_searching calling run_custom_job" << std::endl;
+    run_custom_job([this]() { 
+        std::cerr << "Thread::start_searching lambda start" << std::endl;
+        worker->start_searching(); 
+        std::cerr << "Thread::start_searching lambda end" << std::endl;
+    });
 }
 
 // Clears the histories for the thread worker (usually before a new game)
@@ -95,9 +100,20 @@ void Thread::clear_worker() {
 
 // Blocks on the condition variable until the thread has finished searching
 void Thread::wait_for_search_finished() {
+    std::cerr << "Thread::wait_for_search_finished enter for thread " << idx << std::endl;
+    
+#if defined(USE_PTHREADS)
+    if (pthread_equal(stdThread.get_id(), pthread_self())) {
+#else
+    if (stdThread.get_id() == std::this_thread::get_id()) {
+#endif
+        std::cerr << "Thread::wait_for_search_finished detected self-wait, returning" << std::endl;
+        return;
+    }
 
     std::unique_lock<std::mutex> lk(mutex);
     cv.wait(lk, [&] { return !searching; });
+    std::cerr << "Thread::wait_for_search_finished exit for thread " << idx << std::endl;
 }
 
 // Launching a function in the thread
@@ -121,19 +137,26 @@ void Thread::idle_loop() {
     {
         std::unique_lock<std::mutex> lk(mutex);
         searching = false;
-        cv.notify_one();  // Wake up anyone waiting for search finished
+        std::cerr << "Thread " << idx << " idle_loop: searching=false, notifying" << std::endl;
+        cv.notify_all();  // Wake up anyone waiting for search finished
         cv.wait(lk, [&] { return searching; });
 
-        if (exit)
+        if (exit) {
+            std::cerr << "Thread " << idx << " idle_loop: exit" << std::endl;
             return;
+        }
 
+        std::cerr << "Thread " << idx << " idle_loop: got job" << std::endl;
         std::function<void()> job = std::move(jobFunc);
         jobFunc                   = nullptr;
 
         lk.unlock();
 
-        if (job)
-            job();
+        if (job) {
+             std::cerr << "Thread " << idx << " idle_loop: running job" << std::endl;
+             job();
+             std::cerr << "Thread " << idx << " idle_loop: job finished" << std::endl;
+        }
     }
 }
 
@@ -307,6 +330,7 @@ void ThreadPool::start_thinking(const OptionsMap&  options,
     for (auto&& th : threads)
         th->wait_for_search_finished();
 
+    std::cerr << "ThreadPool::start_thinking calling main_thread->start_searching" << std::endl;
     main_thread()->start_searching();
 }
 

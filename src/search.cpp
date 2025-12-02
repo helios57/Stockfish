@@ -176,8 +176,10 @@ void Search::Worker::ensure_network_replicated() {
 }
 
 void Search::Worker::start_searching() {
+    std::cerr << "Worker::start_searching enter" << std::endl;
 
     accumulatorStack.reset();
+    std::cerr << "Worker::start_searching accumulator reset done" << std::endl;
 
     // Non-main threads go directly to iterative_deepening()
     if (!is_mainthread())
@@ -186,8 +188,10 @@ void Search::Worker::start_searching() {
         return;
     }
 
+    std::cerr << "Worker::start_searching calling tm.init" << std::endl;
     main_manager()->tm.init(limits, rootPos.side_to_move(), rootPos.game_ply(), options,
                             main_manager()->originalTimeAdjust);
+    std::cerr << "Worker::start_searching calling tt.new_search" << std::endl;
     tt.new_search();
 
     if (rootMoves.empty())
@@ -198,8 +202,10 @@ void Search::Worker::start_searching() {
     }
     else
     {
+        std::cerr << "Worker::start_searching calling iterative_deepening" << std::endl;
         threads.start_searching();  // start non-main threads
         iterative_deepening();      // main thread start searching
+        std::cerr << "Worker::start_searching iterative_deepening returned" << std::endl;
     }
 
     // When we reach the maximum depth, we can arrive here without a raise of
@@ -223,6 +229,8 @@ void Search::Worker::start_searching() {
         main_manager()->tm.advance_nodes_time(threads.nodes_searched()
                                               - limits.inc[rootPos.side_to_move()]);
 
+    std::cerr << "Worker::start_searching calculating best move" << std::endl;
+
     Worker* bestThread = this;
     Skill   skill =
       Skill(options["Skill Level"], options["LimitStrength"] ? int(options["Elo"]) : 0);
@@ -245,13 +253,17 @@ void Search::Worker::start_searching() {
         ponder = move_to_string(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
     
     auto bestmove = move_to_string(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+    
+    std::cerr << "Worker::start_searching calling onBestmove: " << bestmove << std::endl;
     main_manager()->updates.onBestmove(bestmove, ponder);
+    std::cerr << "Worker::start_searching onBestmove returned" << std::endl;
 }
 
 // Main iterative deepening loop. It calls search()
 // repeatedly with increasing depth until the allocated thinking time has been
 // consumed, the user stops the search, or the maximum search depth is reached.
 void Search::Worker::iterative_deepening() {
+    std::cerr << "Worker::iterative_deepening enter" << std::endl;
 
     SearchManager* mainThread = (is_mainthread() ? main_manager() : nullptr);
 
@@ -273,6 +285,8 @@ void Search::Worker::iterative_deepening() {
     Stack  stack[MAX_PLY + 10] = {};
     Stack* ss                  = stack + 7;
 
+    std::cerr << "Worker::iterative_deepening stack allocated" << std::endl;
+
     for (int i = 7; i > 0; --i)
     {
         (ss - i)->continuationHistory =
@@ -281,10 +295,13 @@ void Search::Worker::iterative_deepening() {
         (ss - i)->staticEval                    = VALUE_NONE;
     }
 
+    std::cerr << "Worker::iterative_deepening history init done" << std::endl;
+
     for (int i = 0; i <= MAX_PLY + 2; ++i)
         (ss + i)->ply = i;
 
     ss->pv = pv;
+    std::cerr << "Worker::iterative_deepening ss->pv assigned" << std::endl;
 
     if (mainThread)
     {
@@ -294,24 +311,38 @@ void Search::Worker::iterative_deepening() {
             mainThread->iterValue.fill(mainThread->bestPreviousScore);
     }
 
+    std::cerr << "Worker::iterative_deepening mainThread check done" << std::endl;
+
+    std::cerr << "Worker::iterative_deepening accessing MultiPV" << std::endl;
     size_t multiPV = size_t(options["MultiPV"]);
+    std::cerr << "Worker::iterative_deepening MultiPV: " << multiPV << std::endl;
+
+    std::cerr << "Worker::iterative_deepening accessing Skill Level" << std::endl;
     Skill skill(options["Skill Level"], options["LimitStrength"] ? int(options["Elo"]) : 0);
+    std::cerr << "Worker::iterative_deepening Skill initialized" << std::endl;
 
     // When playing with strength handicap enable MultiPV search that we will
     // use behind-the-scenes to retrieve a set of possible moves.
     if (skill.enabled())
         multiPV = std::max(multiPV, size_t(4));
 
+    std::cerr << "Worker::iterative_deepening checking rootMoves size" << std::endl;
+    std::cerr << "Worker::iterative_deepening rootMoves.size(): " << rootMoves.size() << std::endl;
+
     multiPV = std::min(multiPV, rootMoves.size());
 
-    int searchAgainCounter = 0;
-
+    std::cerr << "Worker::iterative_deepening accessing lowPlyHistory at " << &lowPlyHistory << std::endl;
     lowPlyHistory.fill(97);
+    std::cerr << "Worker::iterative_deepening lowPlyHistory filled" << std::endl;
+
+    int searchAgainCounter = 0;
 
     // Iterative deepening loop until requested to stop or the target depth is reached
     while (++rootDepth < MAX_PLY && !threads.stop
            && !(limits.depth && mainThread && rootDepth > limits.depth))
     {
+        std::cerr << "Worker::iterative_deepening loop depth " << rootDepth << std::endl;
+
         // Age out PV variability metric
         if (mainThread)
             totBestMoveChanges /= 2;
@@ -330,6 +361,7 @@ void Search::Worker::iterative_deepening() {
         // MultiPV loop. We perform a full root search for each PV line
         for (pvIdx = 0; pvIdx < multiPV; ++pvIdx)
         {
+            std::cerr << "Worker::iterative_deepening multiPV loop pvIdx " << pvIdx << std::endl;
             if (pvIdx == pvLast)
             {
                 pvFirst = pvLast;
@@ -362,7 +394,10 @@ void Search::Worker::iterative_deepening() {
                 Depth adjustedDepth =
                   std::max(1, rootDepth - failedHighCnt - 3 * (searchAgainCounter + 1) / 4);
                 rootDelta = beta - alpha;
+                
+                std::cerr << "Worker::iterative_deepening calling search" << std::endl;
                 bestValue = search<Root>(rootPos, ss, alpha, beta, adjustedDepth, false);
+                std::cerr << "Worker::iterative_deepening search returned " << bestValue << std::endl;
 
                 // Bring the best move to the front. It is critical that sorting
                 // is done with a stable algorithm because all the values but the
@@ -370,7 +405,9 @@ void Search::Worker::iterative_deepening() {
                 // and we want to keep the same order for all the moves except the
                 // new PV that goes to the front. Note that in the case of MultiPV
                 // search the already searched PV lines are preserved.
+                std::cerr << "Worker::iterative_deepening calling stable_sort, pvIdx=" << pvIdx << " pvLast=" << pvLast << std::endl;
                 std::stable_sort(rootMoves.begin() + pvIdx, rootMoves.begin() + pvLast);
+                std::cerr << "Worker::iterative_deepening stable_sort done" << std::endl;
 
                 // If search has been stopped, we break immediately. Sorting is
                 // safe because RootMoves is still valid, although it refers to
@@ -382,8 +419,11 @@ void Search::Worker::iterative_deepening() {
                 // excessive output that could hang GUIs like Fritz 19, only start
                 // at nodes > 10M (rather than depth N, which can be reached quickly)
                 if (mainThread && multiPV == 1 && (bestValue <= alpha || bestValue >= beta)
-                    && nodes > 10000000)
+                    && nodes > 10000000) {
+                    std::cerr << "Worker::iterative_deepening calling pv()" << std::endl;
                     main_manager()->pv(*this, threads, tt, rootDepth);
+                    std::cerr << "Worker::iterative_deepening pv() done" << std::endl;
+                }
 
                 // In case of failing low/high increase aspiration window and re-search,
                 // otherwise exit the loop.
@@ -403,7 +443,10 @@ void Search::Worker::iterative_deepening() {
                     ++failedHighCnt;
                 }
                 else
+                {
+                    std::cerr << "Worker::iterative_deepening aspiration satisfied" << std::endl;
                     break;
+                }
 
                 delta += delta / 3;
 
@@ -411,7 +454,9 @@ void Search::Worker::iterative_deepening() {
             }
 
             // Sort the PV lines searched so far and update the GUI
+            std::cerr << "Worker::iterative_deepening sorting PV lines (outer), pvFirst=" << pvFirst << " pvIdx=" << pvIdx << std::endl;
             std::stable_sort(rootMoves.begin() + pvFirst, rootMoves.begin() + pvIdx + 1);
+            std::cerr << "Worker::iterative_deepening PV lines sorted (outer)" << std::endl;
 
             if (mainThread
                 && (threads.stop || pvIdx + 1 == multiPV || nodes > 10000000)
@@ -420,15 +465,21 @@ void Search::Worker::iterative_deepening() {
                 // if we would have had time to fully search other root-moves. Thus
                 // we suppress this output and below pick a proven score/PV for this
                 // thread (from the previous iteration).
-                && !(threads.abortedSearch && is_loss(rootMoves[0].uciScore)))
-                main_manager()->pv(*this, threads, tt, rootDepth);
+                && !(threads.abortedSearch && is_loss(rootMoves[0].uciScore))) {
+                    std::cerr << "Worker::iterative_deepening calling pv() outer" << std::endl;
+                    main_manager()->pv(*this, threads, tt, rootDepth);
+                    std::cerr << "Worker::iterative_deepening pv() outer done" << std::endl;
+                }
 
             if (threads.stop)
                 break;
         }
 
         if (!threads.stop)
+        {
+            std::cerr << "Worker::iterative_deepening updating completedDepth" << std::endl;
             completedDepth = rootDepth;
+        }
 
         // We make sure not to pick an unproven mated-in score,
         // in case this thread prematurely stopped search (aborted-search).
@@ -436,13 +487,16 @@ void Search::Worker::iterative_deepening() {
             && is_loss(rootMoves[0].score))
         {
             // Bring the last best move to the front for best thread selection.
+            std::cerr << "Worker::iterative_deepening moving lastBestPV to front" << std::endl;
             Utility::move_to_front(rootMoves, [&lastBestPV = std::as_const(lastBestPV)](
                                                 const auto& rm) { return rm == lastBestPV[0]; });
             rootMoves[0].pv    = lastBestPV;
             rootMoves[0].score = rootMoves[0].uciScore = lastBestScore;
+            std::cerr << "Worker::iterative_deepening move_to_front done" << std::endl;
         }
         else if (rootMoves[0].pv[0] != lastBestPV[0])
         {
+            std::cerr << "Worker::iterative_deepening updating lastBestPV" << std::endl;
             lastBestPV        = rootMoves[0].pv;
             lastBestScore     = rootMoves[0].score;
             lastBestMoveDepth = rootDepth;
@@ -451,6 +505,7 @@ void Search::Worker::iterative_deepening() {
         if (!mainThread)
             continue;
 
+        std::cerr << "Worker::iterative_deepening checking mate limits" << std::endl;
         // Have we found a "mate in x"?
         if (limits.mate && rootMoves[0].score == rootMoves[0].uciScore
             && ((rootMoves[0].score >= VALUE_MATE_IN_MAX_PLY
@@ -461,8 +516,10 @@ void Search::Worker::iterative_deepening() {
             threads.stop = true;
 
         // If the skill level is enabled and time is up, pick a sub-optimal best move
-        if (skill.enabled() && skill.time_to_pick(rootDepth))
+        if (skill.enabled() && skill.time_to_pick(rootDepth)) {
+            std::cerr << "Worker::iterative_deepening picking skill move" << std::endl;
             skill.pick_best(rootMoves, multiPV);
+        }
 
         // Use part of the gained time from a previous stable move for the current move
         for (auto&& th : threads)
@@ -471,6 +528,7 @@ void Search::Worker::iterative_deepening() {
             th->worker->bestMoveChanges = 0;
         }
 
+        std::cerr << "Worker::iterative_deepening checking time management" << std::endl;
         // Do we have time for the next iteration? Can we stop searching now?
         if (limits.use_time_management() && !threads.stop && !mainThread->stopOnPonderhit)
         {
@@ -502,6 +560,8 @@ void Search::Worker::iterative_deepening() {
                 totalTime = std::min(502.0, totalTime);
 
             auto elapsedTime = elapsed();
+            
+            std::cerr << "Worker::iterative_deepening elapsed: " << elapsedTime << " totalTime: " << totalTime << std::endl;
 
             // Stop the search if we have exceeded the totalTime or maximum
             if (elapsedTime > std::min(totalTime, double(mainThread->tm.maximum())))
@@ -519,7 +579,10 @@ void Search::Worker::iterative_deepening() {
 
         mainThread->iterValue[iterIdx] = bestValue;
         iterIdx                        = (iterIdx + 1) & 3;
+        std::cerr << "Worker::iterative_deepening loop end" << std::endl;
     }
+    
+    std::cerr << "Worker::iterative_deepening loop finished" << std::endl;
 
     if (!mainThread)
         return;
@@ -2100,6 +2163,7 @@ void SearchManager::pv(Search::Worker&           worker,
                        const ThreadPool&         threads,
                        const TranspositionTable& tt,
                        Depth                     depth) {
+    std::cerr << "SearchManager::pv enter" << std::endl;
 
     const auto nodes     = threads.nodes_searched();
     auto&      rootMoves = worker.rootMoves;
@@ -2110,6 +2174,7 @@ void SearchManager::pv(Search::Worker&           worker,
 
     for (size_t i = 0; i < multiPV; ++i)
     {
+        std::cerr << "SearchManager::pv loop i=" << i << std::endl;
         bool updated = rootMoves[i].score != -VALUE_INFINITE;
 
         if (depth == 1 && !updated && i > 0)
@@ -2128,8 +2193,10 @@ void SearchManager::pv(Search::Worker&           worker,
 
         // Potentially correct and extend the PV, and in exceptional cases v
         if (is_decisive(v) && std::abs(v) < VALUE_MATE_IN_MAX_PLY
-            && ((!rootMoves[i].scoreLowerbound && !rootMoves[i].scoreUpperbound) || isExact))
+            && ((!rootMoves[i].scoreLowerbound && !rootMoves[i].scoreUpperbound) || isExact)) {
+            std::cerr << "SearchManager::pv calling syzygy_extend_pv" << std::endl;
             syzygy_extend_pv(worker.options, worker.limits, pos, rootMoves[i], v);
+        }
 
         std::string pv;
         for (Move m : rootMoves[i].pv)
@@ -2163,8 +2230,11 @@ void SearchManager::pv(Search::Worker&           worker,
         info.pv        = pv;
         info.hashfull  = tt.hashfull();
 
+        std::cerr << "SearchManager::pv calling onUpdateFull" << std::endl;
         updates.onUpdateFull(info);
+        std::cerr << "SearchManager::pv onUpdateFull done" << std::endl;
     }
+    std::cerr << "SearchManager::pv exit" << std::endl;
 }
 
 // Called in case we have no ponder move before exiting the search,
