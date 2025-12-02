@@ -79,17 +79,16 @@ void GrpcAgent::start() {
         }
 
         if (!success) {
-            std::cerr << "Failed to send JoinRequest" << std::endl;
         } else {
             std::cout << "Joined. Waiting for server messages..." << std::endl;
             should_exit_stream = false;
             run_stream();
         }
-        
+
         // If run_stream returns, stream is closed.
         std::cout << "Disconnected. Retrying in 5 seconds..." << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(5));
-        
+
         // Reset stream
         {
             std::lock_guard<std::mutex> lock(stream_mutex);
@@ -124,22 +123,21 @@ void GrpcAgent::handle_server_message(const chess_contest::ServerToClientMessage
             handle_error(msg.error());
             break;
         default:
-            std::cerr << "Unknown message type received" << std::endl;
             break;
     }
 }
 
 void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
-    std::cout << "Game started: " << msg.game_id() 
-              << " vs " << msg.opponent_name() 
+    std::cout << "Game started: " << msg.game_id()
+              << " vs " << msg.opponent_name()
               << " (Color: " << msg.color() << ")" << std::endl;
-    
+
     // Stop and clear engine outside the lock to avoid deadlock
     std::cout << "Stopping engine..." << std::endl;
     engine->stop();
     std::cout << "Clearing search..." << std::endl;
     engine->search_clear();
-    
+
     {
         std::lock_guard<std::mutex> lock(agent_mutex);
         current_game_id = msg.game_id();
@@ -148,7 +146,7 @@ void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
         game_moves.clear();
         active_search_game_id.clear();
     }
-    
+
     std::cout << "Setting position..." << std::endl;
     engine->reset();
     std::cout << "Game setup complete." << std::endl;
@@ -156,13 +154,13 @@ void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
 
 void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
     std::string opp_move = msg.opponent_move_lan();
-    std::cout << "Received MoveRequest. Opponent move: " << (opp_move.empty() ? "none" : opp_move) 
+    std::cout << "Received MoveRequest. Opponent move: " << (opp_move.empty() ? "none" : opp_move)
               << " Time left: " << msg.your_remaining_time_ms() << "ms" << std::endl;
-    
+
     std::string game_id;
     std::string color;
     int inc_ms;
-    
+
     {
         std::lock_guard<std::mutex> lock(agent_mutex);
         if (!opp_move.empty()) {
@@ -171,66 +169,59 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
         game_id = current_game_id;
         color = my_color;
         inc_ms = increment_ms;
-        
+
         // We set this here to allow on_bestmove to proceed when it fires
         active_search_game_id = current_game_id;
+
+        // Update position safely inside lock
+        // This ensures 'states' is recreated and valid for the next search
+        engine->set_position(StartFEN, game_moves);
     }
-    
-    // Engine operations outside lock to avoid deadlock if engine->go() blocks waiting for previous search
-    if (!opp_move.empty()) {
-        engine->apply_move(opp_move);
-    }
-    
+
     Search::LimitsType limits;
-    
+
     // Color string is "WHITE" or "BLACK"
     // Stockfish Color enum: WHITE=0, BLACK=1
     Color us = (color == "WHITE") ? WHITE : BLACK;
     Color them = ~us;
-    
+
     limits.time[us] = msg.your_remaining_time_ms();
     limits.time[them] = msg.opponent_remaining_time_ms();
     limits.inc[us] = inc_ms;
     limits.inc[them] = inc_ms;
-    
-    limits.startTime = now(); 
-    
+
+    limits.startTime = now();
+
     engine->go(limits);
 }
 
 void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) {
-    std::cerr << "GrpcAgent::on_bestmove enter: " << bestmove << std::endl;
     std::string move_str(bestmove);
-    
+
     std::lock_guard<std::mutex> lock(agent_mutex);
-    std::cerr << "GrpcAgent::on_bestmove lock acquired" << std::endl;
-    
+
     if (active_search_game_id != current_game_id || current_game_id.empty()) {
-         std::cerr << "GrpcAgent::on_bestmove game id mismatch or empty" << std::endl;
          return;
     }
-    
+
     game_moves.push_back(move_str);
-    
+
     // Apply our move to the engine state incrementally
-    std::cerr << "GrpcAgent::on_bestmove applying move to engine" << std::endl;
-    engine->apply_move(move_str);
+    // Use set_position to ensure states is recreated (it was moved to threads during search)
+    engine->set_position(StartFEN, game_moves);
 
     chess_contest::ClientToServerMessage req;
     auto resp = req.mutable_move_response();
     resp->set_game_id(current_game_id);
     resp->set_move_lan(move_str);
-    
-    std::cerr << "GrpcAgent::on_bestmove writing to stream" << std::endl;
+
     std::lock_guard<std::mutex> stream_lock(stream_mutex);
     if (stream) {
         if (!stream->Write(req)) {
-             std::cerr << "Failed to write MoveResponse" << std::endl;
         }
     }
-    
+
     std::cout << "Bestmove: " << move_str << std::endl;
-    std::cerr << "GrpcAgent::on_bestmove exit" << std::endl;
 }
 
 void GrpcAgent::handle_draw_offer(const chess_contest::DrawOfferEvent& msg) {
@@ -239,7 +230,7 @@ void GrpcAgent::handle_draw_offer(const chess_contest::DrawOfferEvent& msg) {
         auto resp = req.mutable_draw_offer_response();
         resp->set_game_id(msg.game_id());
         resp->set_accepted(true);
-        
+
         std::lock_guard<std::mutex> lock(stream_mutex);
         if (stream) stream->Write(req);
         std::cout << "Auto-accepted draw offer." << std::endl;
@@ -255,7 +246,6 @@ void GrpcAgent::handle_game_over(const chess_contest::GameOver& msg) {
 }
 
 void GrpcAgent::handle_error(const chess_contest::Error& msg) {
-    std::cerr << "Server Error: " << msg.message() << std::endl;
 }
 
 } // namespace Stockfish
