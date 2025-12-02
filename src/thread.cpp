@@ -55,7 +55,6 @@ Thread::Thread(Search::SharedState&                    sharedState,
         // Use the binder to [maybe] bind the threads to a NUMA node before doing
         // the Worker allocation. Ideally we would also allocate the SearchManager
         // here, but that's minor.
-        std::cerr << "Thread " << n << ": allocating worker..." << std::endl;
         this->numaAccessToken = binder();
         this->worker = make_unique_large_page<Search::Worker>(sharedState, std::move(sm), n,
                                                               this->numaAccessToken);
@@ -63,7 +62,6 @@ Thread::Thread(Search::SharedState&                    sharedState,
             std::cerr << "Failed to allocate Search::Worker for thread " << n << std::endl;
             std::exit(EXIT_FAILURE);
         }
-        std::cerr << "Thread " << n << ": worker allocated." << std::endl;
     });
 
     wait_for_search_finished();
@@ -84,11 +82,8 @@ Thread::~Thread() {
 // Wakes up the thread that will start the search
 void Thread::start_searching() {
     assert(worker != nullptr);
-    std::cerr << "Thread::start_searching calling run_custom_job" << std::endl;
     run_custom_job([this]() { 
-        std::cerr << "Thread::start_searching lambda start" << std::endl;
         worker->start_searching(); 
-        std::cerr << "Thread::start_searching lambda end" << std::endl;
     });
 }
 
@@ -100,20 +95,17 @@ void Thread::clear_worker() {
 
 // Blocks on the condition variable until the thread has finished searching
 void Thread::wait_for_search_finished() {
-    std::cerr << "Thread::wait_for_search_finished enter for thread " << idx << std::endl;
     
 #if defined(USE_PTHREADS)
     if (pthread_equal(stdThread.get_id(), pthread_self())) {
 #else
     if (stdThread.get_id() == std::this_thread::get_id()) {
 #endif
-        std::cerr << "Thread::wait_for_search_finished detected self-wait, returning" << std::endl;
         return;
     }
 
     std::unique_lock<std::mutex> lk(mutex);
     cv.wait(lk, [&] { return !searching; });
-    std::cerr << "Thread::wait_for_search_finished exit for thread " << idx << std::endl;
 }
 
 // Launching a function in the thread
@@ -137,25 +129,20 @@ void Thread::idle_loop() {
     {
         std::unique_lock<std::mutex> lk(mutex);
         searching = false;
-        std::cerr << "Thread " << idx << " idle_loop: searching=false, notifying" << std::endl;
         cv.notify_all();  // Wake up anyone waiting for search finished
         cv.wait(lk, [&] { return searching; });
 
         if (exit) {
-            std::cerr << "Thread " << idx << " idle_loop: exit" << std::endl;
             return;
         }
 
-        std::cerr << "Thread " << idx << " idle_loop: got job" << std::endl;
         std::function<void()> job = std::move(jobFunc);
         jobFunc                   = nullptr;
 
         lk.unlock();
 
         if (job) {
-             std::cerr << "Thread " << idx << " idle_loop: running job" << std::endl;
              job();
-             std::cerr << "Thread " << idx << " idle_loop: job finished" << std::endl;
         }
     }
 }
@@ -313,7 +300,6 @@ void ThreadPool::start_thinking(const OptionsMap&  options,
     for (auto&& th : threads)
     {
         th->run_custom_job([&]() {
-            std::cerr << "Thread " << th->id() << " setup job start" << std::endl;
             if (!th->worker) return;
             th->worker->limits = limits;
             th->worker->nodes = th->worker->tbHits = th->worker->nmpMinPly =
@@ -323,14 +309,12 @@ void ThreadPool::start_thinking(const OptionsMap&  options,
             th->worker->rootPos.set(pos.fen(), pos.is_chess960(), &th->worker->rootState);
             th->worker->rootState = setupStates->back();
             th->worker->tbConfig  = tbConfig;
-            std::cerr << "Thread " << th->id() << " setup job end" << std::endl;
         });
     }
 
     for (auto&& th : threads)
         th->wait_for_search_finished();
 
-    std::cerr << "ThreadPool::start_thinking calling main_thread->start_searching" << std::endl;
     main_thread()->start_searching();
 }
 

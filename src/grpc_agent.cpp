@@ -174,12 +174,14 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
         
         // We set this here to allow on_bestmove to proceed when it fires
         active_search_game_id = current_game_id;
+
+        // Update position safely inside lock
+        // This ensures 'states' is recreated and valid for the next search
+        engine->set_position(StartFEN, game_moves);
     }
     
     // Engine operations outside lock to avoid deadlock if engine->go() blocks waiting for previous search
-    if (!opp_move.empty()) {
-        engine->apply_move(opp_move);
-    }
+    // Note: apply_move removed here as we use set_position above
     
     Search::LimitsType limits;
     
@@ -199,29 +201,25 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
 }
 
 void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) {
-    std::cerr << "GrpcAgent::on_bestmove enter: " << bestmove << std::endl;
     std::string move_str(bestmove);
     
     std::lock_guard<std::mutex> lock(agent_mutex);
-    std::cerr << "GrpcAgent::on_bestmove lock acquired" << std::endl;
     
     if (active_search_game_id != current_game_id || current_game_id.empty()) {
-         std::cerr << "GrpcAgent::on_bestmove game id mismatch or empty" << std::endl;
          return;
     }
     
     game_moves.push_back(move_str);
     
     // Apply our move to the engine state incrementally
-    std::cerr << "GrpcAgent::on_bestmove applying move to engine" << std::endl;
-    engine->apply_move(move_str);
+    // Use set_position to ensure states is recreated (it was moved to threads during search)
+    engine->set_position(StartFEN, game_moves);
 
     chess_contest::ClientToServerMessage req;
     auto resp = req.mutable_move_response();
     resp->set_game_id(current_game_id);
     resp->set_move_lan(move_str);
     
-    std::cerr << "GrpcAgent::on_bestmove writing to stream" << std::endl;
     std::lock_guard<std::mutex> stream_lock(stream_mutex);
     if (stream) {
         if (!stream->Write(req)) {
@@ -230,7 +228,6 @@ void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) 
     }
     
     std::cout << "Bestmove: " << move_str << std::endl;
-    std::cerr << "GrpcAgent::on_bestmove exit" << std::endl;
 }
 
 void GrpcAgent::handle_draw_offer(const chess_contest::DrawOfferEvent& msg) {
