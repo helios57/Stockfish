@@ -54,6 +54,7 @@ private:
     std::string my_color; // "WHITE" or "BLACK"
     std::vector<std::string> game_moves;
     int increment_ms;
+    bool should_exit_stream;
 };
 
 } // namespace Stockfish

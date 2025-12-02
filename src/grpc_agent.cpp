@@ -82,6 +82,7 @@ void GrpcAgent::start() {
             std::cerr << "Failed to send JoinRequest" << std::endl;
         } else {
             std::cout << "Joined. Waiting for server messages..." << std::endl;
+            should_exit_stream = false;
             run_stream();
         }
         
@@ -101,6 +102,7 @@ void GrpcAgent::run_stream() {
     chess_contest::ServerToClientMessage msg;
     while (stream->Read(&msg)) {
         handle_server_message(msg);
+        if (should_exit_stream) break;
     }
 }
 
@@ -240,6 +242,7 @@ void GrpcAgent::handle_game_over(const chess_contest::GameOver& msg) {
     std::lock_guard<std::mutex> lock(agent_mutex);
     engine->stop();
     active_search_game_id.clear();
+    should_exit_stream = true;
 }
 
 void GrpcAgent::handle_error(const chess_contest::Error& msg) {
