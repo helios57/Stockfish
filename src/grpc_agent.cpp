@@ -174,11 +174,10 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
         
         // We set this here to allow on_bestmove to proceed when it fires
         active_search_game_id = current_game_id;
-    }
-    
-    // Engine operations outside lock to avoid deadlock if engine->go() blocks waiting for previous search
-    if (!opp_move.empty()) {
-        engine->apply_move(opp_move);
+
+        // Update position safely inside lock
+        // This ensures 'states' is recreated and valid for the next search
+        engine->set_position(StartFEN, game_moves);
     }
     
     Search::LimitsType limits;
@@ -214,7 +213,8 @@ void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) 
     
     // Apply our move to the engine state incrementally
     std::cerr << "GrpcAgent::on_bestmove applying move to engine" << std::endl;
-    engine->apply_move(move_str);
+    // Use set_position to ensure states is recreated (it was moved to threads during search)
+    engine->set_position(StartFEN, game_moves);
 
     chess_contest::ClientToServerMessage req;
     auto resp = req.mutable_move_response();
