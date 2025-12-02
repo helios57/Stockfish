@@ -52,12 +52,20 @@ BINDIR = $(PREFIX)/bin
 PGOBENCH = $(WINE_PATH) ./$(EXE) bench
 
 ### Source and object files
-SRCS = benchmark.cpp bitboard.cpp evaluate.cpp main.cpp \
+GRPC_SRCS = chess_contest.pb.cc chess_contest.grpc.pb.cc
+
+COMMON_SRCS = benchmark.cpp bitboard.cpp evaluate.cpp \
 	misc.cpp movegen.cpp movepick.cpp position.cpp \
 	search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp syzygy/tbprobe.cpp \
 	nnue/nnue_accumulator.cpp nnue/nnue_misc.cpp nnue/network.cpp \
 	nnue/features/half_ka_v2_hm.cpp nnue/features/full_threats.cpp \
-	engine.cpp score.cpp memory.cpp
+	engine.cpp score.cpp memory.cpp agent_config.cpp grpc_agent.cpp $(GRPC_SRCS)
+
+ifeq ($(BUILD_UCI),1)
+	SRCS = $(COMMON_SRCS) main.cpp
+else
+	SRCS = $(COMMON_SRCS) main_grpc.cpp
+endif
 
 HEADERS = benchmark.h bitboard.h evaluate.h misc.h movegen.h movepick.h history.h \
 		nnue/nnue_misc.h nnue/features/half_ka_v2_hm.h nnue/features/full_threats.h \
@@ -67,7 +75,7 @@ HEADERS = benchmark.h bitboard.h evaluate.h misc.h movegen.h movepick.h history.
 		position.h search.h syzygy/tbprobe.h thread.h thread_win32_osx.h timeman.h \
 		tt.h tune.h types.h uci.h ucioption.h perft.h nnue/network.h engine.h score.h numa.h memory.h
 
-OBJS = $(notdir $(SRCS:.cpp=.o))
+OBJS = $(notdir $(patsubst %.cpp,%.o,$(patsubst %.cc,%.o,$(SRCS))))
 
 VPATH = syzygy:nnue:nnue/features
 
@@ -1090,6 +1098,18 @@ config-sanity: net
 	(test "$(comp)" = "gcc" || test "$(comp)" = "icx" || test "$(comp)" = "mingw" || \
 	 test "$(comp)" = "clang" || test "$(comp)" = "armv7a-linux-androideabi16-clang" || \
 	 test "$(comp)" = "aarch64-linux-android21-clang")
+
+### gRPC and Protobuf flags
+LDFLAGS += $(shell pkg-config --libs protobuf grpc++ grpc)
+CXXFLAGS += $(shell pkg-config --cflags protobuf grpc++ grpc)
+
+.cc.o:
+	$(CXX) $(DEPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+chess_contest.pb.cc chess_contest.grpc.pb.cc: ../chess_contest.proto
+	protoc -I.. --cpp_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$(which grpc_cpp_plugin) ../chess_contest.proto
+
+grpc_agent.o: chess_contest.pb.cc chess_contest.grpc.pb.cc
 
 $(EXE): $(OBJS)
 	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)

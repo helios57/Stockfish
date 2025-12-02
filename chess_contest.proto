@@ -1,0 +1,174 @@
+syntax = "proto3";
+package chess_contest;
+
+option go_package = "adjudicator/proto";
+
+// The ChessGame service defines the primary RPC for playing a game.
+// The entire game is managed over a single bidirectional stream.
+service ChessGame {
+  // A single bidirectional stream manages the entire game flow from
+  // joining to game over.
+  rpc PlayGame(stream ClientToServerMessage) returns (stream ServerToClientMessage);
+}
+
+// The MatchmakingLobby service provides RPCs for the training lobby,
+// allowing agents to see who is waiting and issue direct challenges.
+service MatchmakingLobby {
+  // (Authentication is handled via gRPC metadata/API key)
+
+  // Lists all agents currently in TRAINING mode waiting for a challenge.
+  rpc ListWaitingAgents(ListWaitingAgentsRequest) returns (ListWaitingAgentsResponse);
+}
+
+// ===============================================
+// Lobby Service Messages
+// ===============================================
+
+message ListWaitingAgentsRequest {
+  // string game_mode = 1; // OPTIONAL: Filter by game mode, defaults to "TRAINING"
+}
+
+message ListWaitingAgentsResponse {
+  repeated WaitingAgent agents = 1;
+}
+
+message WaitingAgent {
+  string agent_id = 1;   // The unique ID of the agent (e.g., their connection ID).
+  string agent_name = 2; // The human-readable name of the agent (from their user profile).
+  int32 rating = 3;      // The agent's current rating.
+}
+
+// ===============================================
+// Client-to-Server Messages
+// ===============================================
+
+// ClientToServerMessage is a wrapper for all possible messages an agent
+// can send to the server during a game.
+message ClientToServerMessage {
+  oneof message {
+    JoinRequest join_request = 1;
+    MoveResponse move_response = 2;
+    ResignRequest resign_request = 3;
+    DrawOfferRequest draw_offer_request = 4;
+    DrawOfferResponse draw_offer_response = 5;
+  }
+}
+
+// A request to join the matchmaking queue or challenge an agent.
+message JoinRequest {
+  // REQUIRED: The API key for authenticating the agent.
+  string api_key = 1;
+  // REQUIRED: The game mode to join.
+  // "TRAINING", "OPEN", or "RANKED"
+  string game_mode = 2;
+  // REQUIRED: The time control for the game.
+  // e.g., "180+2" for 3 minutes + 2s increment
+  string time_control = 3;
+  // OPTIONAL: For TRAINING mode, challenge a specific agent_id from the waiting list.
+  // If set, `wait_for_challenge` must be false.
+  string specific_opponent_agent_id = 4;
+  // OPTIONAL: For TRAINING mode, wait to be challenged instead of auto-matching.
+  // If true, the agent is added to the lobby list.
+  bool wait_for_challenge = 5;
+  // OPTIONAL: The name of this agent. Allows multiple agents with different names
+  // to run under the same API key.
+  string agent_name = 6;
+}
+
+// A response containing the agent's chosen move.
+message MoveResponse {
+  // REQUIRED: The ID of the game this move belongs to.
+  string game_id = 1;
+  // REQUIRED: The agent's chosen move in Long Algebraic Notation (LAN).
+  // e.g., "e2e4", "e7e8q"
+  string move_lan = 2;
+}
+
+// Sent by an agent to immediately resign the game.
+message ResignRequest {
+  // REQUIRED: The ID of the game to resign.
+  string game_id = 1;
+}
+
+// Sent by an agent to offer a draw to the opponent.
+message DrawOfferRequest {
+  // REQUIRED: The ID of the game where the draw is offered.
+  string game_id = 1;
+}
+
+// Sent by an agent in response to a DrawOfferEvent from the server.
+message DrawOfferResponse {
+  // REQUIRED: The ID of the game.
+  string game_id = 1;
+  // REQUIRED: Whether the agent accepts or declines the draw offer.
+  bool accepted = 2;
+}
+
+// ===============================================
+// Server-to-Client Messages
+// ===============================================
+
+// ServerToClientMessage is a wrapper for all possible messages the server
+// can send to an agent.
+message ServerToClientMessage {
+  oneof message {
+    GameStarted game_started = 1;
+    MoveRequest move_request = 2;
+    GameOver game_over = 3;
+    Error error = 4;
+    DrawOfferEvent draw_offer = 5;
+  }
+}
+
+// Informs the agent that a game has started.
+// The agent is responsible for initializing its board to the standard
+// starting position upon receiving this.
+message GameStarted {
+  // REQUIRED: The unique ID for this game.
+  string game_id = 1;
+  // REQUIRED: The agent's assigned color for this game.
+  // "WHITE" or "BLACK"
+  string color = 2;
+  // REQUIRED: The initial time on the clock in milliseconds.
+  int32 initial_time_ms = 3;
+  // REQUIRED: The time increment per move in milliseconds.
+  int32 increment_ms = 4;
+  // OPTIONAL: The name of the opponent agent.
+  string opponent_name = 5;
+}
+
+// The server's request for the agent to make a move.
+// The agent is responsible for maintaining its own board state.
+message MoveRequest {
+  // REQUIRED: The opponent's last move in LAN.
+  // This will be an empty string for White's first move of the game.
+  string opponent_move_lan = 1;
+  // REQUIRED: Your remaining time in milliseconds.
+  int32 your_remaining_time_ms = 2;
+  // REQUIRED: Your opponent's remaining time in milliseconds.
+  int32 opponent_remaining_time_ms = 3;
+}
+
+// Informs the agent that the game has concluded.
+message GameOver {
+  // REQUIRED: The result from this agent's perspective.
+  // "WIN", "LOSS", or "DRAW"
+  string result = 1;
+  // REQUIRED: The reason the game ended.
+  // e.g., "CHECKMATE", "TIMEOUT", "RESIGNATION", "STALEMATE", "ILLEGAL_MOVE"
+  string reason = 2;
+  // REQUIRED: The full game record in PGN format.
+  string final_pgn = 3;
+}
+
+// Sent by the server if a non-terminal error occurs (e.g., matchmaking failure).
+message Error {
+  // REQUIRED: A human-readable error message.
+  string message = 1;
+}
+
+// Sent by the server to inform an agent that their opponent has offered a draw.
+message DrawOfferEvent {
+  // REQUIRED: The ID of the game where the draw is offered.
+  string game_id = 1;
+}

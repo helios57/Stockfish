@@ -56,8 +56,56 @@ This distribution of Stockfish consists of the following files:
   * [src][src-link], a subdirectory containing the full source code, including a
     Makefile that can be used to compile Stockfish on Unix-like systems.
 
+  * `agent.env`, a template configuration file for the gRPC agent.
+
+  * `chess_contest.proto`, the Protocol Buffers definition for the game server API.
+
   * a file with the .nnue extension, storing the neural network for the NNUE
     evaluation. Binary distributions will have this file embedded.
+
+## gRPC Agent
+
+This repository now includes a built-in gRPC agent for playing chess games over the network.
+
+### Running with Docker
+
+Build and run the agent using the provided Dockerfile:
+
+```bash
+docker build -t stockfish-agent .
+docker run --env-file agent.env stockfish-agent
+```
+
+### Configuration
+
+Configuration is loaded from `agent.env` or environment variables. You can specify a custom config file path via the `ENV_FILE` environment variable (default: `agent.env`).
+
+*   `API_KEY`: **Required**. Your unique API key.
+*   `AGENT_NAME`: Name of the agent visible to opponents (default: `StockfishAgent`).
+*   `SERVER`: The game server hostname (default: `localhost`).
+*   `SERVER_PORT`: Port number (default: `443`).
+*   `USE_TLS`: Enable TLS/SSL connection (default: `true`).
+*   `GAME_MODE`: Game mode, e.g. `TRAINING`, `RANKED`, `OPEN` (default: `TRAINING`).
+*   `TIME_CONTROL`: Time control for challenges, e.g. `180+2` (default: `180+2`).
+*   `WAIT_FOR_CHALLENGE`: Set to `true` to wait for a challenge instead of auto-matching (default: `false`).
+*   `SPECIFIC_OPPONENT_AGENT_ID`: If set, challenge this specific agent ID (default: empty).
+*   `AUTO_ACCEPT_DRAW`: Set to `true` to automatically accept draw offers (default: `false`).
+
+### Compiling from Source
+
+The default build produces the gRPC agent binary. You need `protobuf` and `grpc++` development libraries installed.
+
+```bash
+cd src
+make -j build
+```
+
+To build the traditional UCI engine:
+
+```bash
+cd src
+make -j build BUILD_UCI=1
+```
 
 ## Contributing
 
