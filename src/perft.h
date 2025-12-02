@@ -24,7 +24,7 @@
 #include "movegen.h"
 #include "position.h"
 #include "types.h"
-#include "uci.h"
+#include "move_conversion.h"
 
 namespace Stockfish::Benchmark {
 
@@ -50,7 +50,7 @@ uint64_t perft(Position& pos, Depth depth) {
             pos.undo_move(m);
         }
         if (Root)
-            sync_cout << UCIEngine::move(m, pos.is_chess960()) << ": " << cnt << sync_endl;
+            sync_cout << move_to_string(m, pos.is_chess960()) << ": " << cnt << sync_endl;
     }
     return nodes;
 }

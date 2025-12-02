@@ -24,7 +24,7 @@
 #include <cstdint>
 
 #include "search.h"
-#include "ucioption.h"
+#include "option.h"
 
 namespace Stockfish {
 

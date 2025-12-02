@@ -150,7 +150,7 @@ void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
     }
     
     std::cout << "Setting position..." << std::endl;
-    engine->set_position(StartFEN, {});
+    engine->reset();
     std::cout << "Game setup complete." << std::endl;
 }
 
@@ -159,7 +159,6 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
     std::cout << "Received MoveRequest. Opponent move: " << (opp_move.empty() ? "none" : opp_move) 
               << " Time left: " << msg.your_remaining_time_ms() << "ms" << std::endl;
     
-    std::vector<std::string> current_moves;
     std::string game_id;
     std::string color;
     int inc_ms;
@@ -169,7 +168,6 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
         if (!opp_move.empty()) {
             game_moves.push_back(opp_move);
         }
-        current_moves = game_moves;
         game_id = current_game_id;
         color = my_color;
         inc_ms = increment_ms;
@@ -179,7 +177,9 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
     }
     
     // Engine operations outside lock to avoid deadlock if engine->go() blocks waiting for previous search
-    engine->set_position(StartFEN, current_moves);
+    if (!opp_move.empty()) {
+        engine->apply_move(opp_move);
+    }
     
     Search::LimitsType limits;
     
@@ -209,6 +209,9 @@ void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) 
     
     game_moves.push_back(move_str);
     
+    // Apply our move to the engine state incrementally
+    engine->apply_move(move_str);
+
     chess_contest::ClientToServerMessage req;
     auto resp = req.mutable_move_response();
     resp->set_game_id(current_game_id);

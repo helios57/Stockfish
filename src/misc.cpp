@@ -156,9 +156,8 @@ std::string engine_version_info() {
     return ss.str();
 }
 
-std::string engine_info(bool to_uci) {
-    return engine_version_info() + (to_uci ? "\nid author " : " by ")
-         + "the Stockfish developers (see AUTHORS file)";
+std::string engine_info() {
+    return engine_version_info() + " by the Stockfish developers (see AUTHORS file)";
 }
 
 

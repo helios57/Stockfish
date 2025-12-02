@@ -41,8 +41,7 @@
 #include "shm.h"
 #include "syzygy/tbprobe.h"
 #include "types.h"
-#include "uci.h"
-#include "ucioption.h"
+#include "option.h"
 
 namespace Stockfish {
 
@@ -111,15 +110,15 @@ Engine::Engine(std::optional<std::string> path) :
 
     options.add("nodestime", Option(0, 0, 10000));
 
-    options.add("UCI_Chess960", Option(false));
+    options.add("Chess960", Option(false));
 
-    options.add("UCI_LimitStrength", Option(false));
+    options.add("LimitStrength", Option(false));
 
-    options.add("UCI_Elo",
+    options.add("Elo",
                 Option(Stockfish::Search::Skill::LowestElo, Stockfish::Search::Skill::LowestElo,
                        Stockfish::Search::Skill::HighestElo));
 
-    options.add("UCI_ShowWDL", Option(false));
+    options.add("ShowWDL", Option(false));
 
     options.add(  //
       "SyzygyPath", Option("", [](const Option& o) {
@@ -158,6 +157,7 @@ std::uint64_t Engine::perft(const std::string& fen, Depth depth, bool isChess960
 void Engine::go(Search::LimitsType& limits) {
     assert(limits.perft == 0);
     verify_networks();
+    std::cout << "Network verification complete. Starting threads..." << std::endl;
 
     threads.start_thinking(options, pos, states, limits);
 }
@@ -198,15 +198,28 @@ void Engine::wait_for_search_finished() { threads.main_thread()->wait_for_search
 void Engine::set_position(const std::string& fen, const std::vector<std::string>& moves) {
     // Drop the old state and create a new one
     states = StateListPtr(new std::deque<StateInfo>(1));
-    pos.set(fen, options["UCI_Chess960"], &states->back());
+    pos.set(fen, options["Chess960"], &states->back());
 
     for (const auto& move : moves)
     {
-        auto m = UCIEngine::to_move(pos, move);
+        auto m = to_move(pos, move);
 
         if (m == Move::none())
             break;
 
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
+}
+
+void Engine::reset() {
+    states = StateListPtr(new std::deque<StateInfo>(1));
+    pos.set(StartFEN, options["Chess960"], &states->back());
+}
+
+void Engine::apply_move(const std::string& move_str) {
+    auto m = to_move(pos, move_str);
+    if (m != Move::none()) {
         states->emplace_back();
         pos.do_move(m, states->back());
     }
@@ -326,7 +339,7 @@ void Engine::save_network(const std::pair<std::optional<std::string>, std::strin
 void Engine::trace_eval() const {
     StateListPtr trace_states(new std::deque<StateInfo>(1));
     Position     p;
-    p.set(pos.fen(), options["UCI_Chess960"], &trace_states->back());
+    p.set(pos.fen(), options["Chess960"], &trace_states->back());
 
     verify_networks();
 

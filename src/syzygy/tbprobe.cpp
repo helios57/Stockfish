@@ -42,7 +42,7 @@
 #include "../position.h"
 #include "../search.h"
 #include "../types.h"
-#include "../ucioption.h"
+#include "../option.h"
 
 #ifndef _WIN32
     #include <fcntl.h>

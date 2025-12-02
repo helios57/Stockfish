@@ -20,7 +20,9 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 #include <deque>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -32,8 +34,8 @@
 #include "syzygy/tbprobe.h"
 #include "timeman.h"
 #include "types.h"
-#include "uci.h"
-#include "ucioption.h"
+#include "option.h"
+#include "move_conversion.h"
 
 namespace Stockfish {
 
@@ -53,9 +55,15 @@ Thread::Thread(Search::SharedState&                    sharedState,
         // Use the binder to [maybe] bind the threads to a NUMA node before doing
         // the Worker allocation. Ideally we would also allocate the SearchManager
         // here, but that's minor.
+        std::cerr << "Thread " << n << ": allocating worker..." << std::endl;
         this->numaAccessToken = binder();
         this->worker = make_unique_large_page<Search::Worker>(sharedState, std::move(sm), n,
                                                               this->numaAccessToken);
+        if (!this->worker) {
+            std::cerr << "Failed to allocate Search::Worker for thread " << n << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        std::cerr << "Thread " << n << ": worker allocated." << std::endl;
     });
 
     wait_for_search_finished();
@@ -255,7 +263,7 @@ void ThreadPool::start_thinking(const OptionsMap&  options,
 
     for (const auto& uciMove : limits.searchmoves)
     {
-        auto move = UCIEngine::to_move(pos, uciMove);
+        auto move = to_move(pos, uciMove);
 
         if (std::find(legalmoves.begin(), legalmoves.end(), move) != legalmoves.end())
             rootMoves.emplace_back(move);
@@ -282,6 +290,8 @@ void ThreadPool::start_thinking(const OptionsMap&  options,
     for (auto&& th : threads)
     {
         th->run_custom_job([&]() {
+            std::cerr << "Thread " << th->id() << " setup job start" << std::endl;
+            if (!th->worker) return;
             th->worker->limits = limits;
             th->worker->nodes = th->worker->tbHits = th->worker->nmpMinPly =
               th->worker->bestMoveChanges          = 0;
@@ -290,6 +300,7 @@ void ThreadPool::start_thinking(const OptionsMap&  options,
             th->worker->rootPos.set(pos.fen(), pos.is_chess960(), &th->worker->rootState);
             th->worker->rootState = setupStates->back();
             th->worker->tbConfig  = tbConfig;
+            std::cerr << "Thread " << th->id() << " setup job end" << std::endl;
         });
     }
 

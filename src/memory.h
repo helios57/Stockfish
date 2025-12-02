@@ -113,6 +113,8 @@ template<typename T, typename ALLOC_FUNC, typename... Args>
 inline std::enable_if_t<!std::is_array_v<T>, T*> memory_allocator(ALLOC_FUNC alloc_func,
                                                                   Args&&... args) {
     void* raw_memory = alloc_func(sizeof(T));
+    if (!raw_memory)
+        return nullptr;
     ASSERT_ALIGNED(raw_memory, alignof(T));
     return new (raw_memory) T(std::forward<Args>(args)...);
 }
@@ -126,8 +128,10 @@ memory_allocator(ALLOC_FUNC alloc_func, size_t num) {
     const size_t array_offset = std::max(sizeof(size_t), alignof(ElementType));
 
     // Save the array size in the memory location
-    char* raw_memory =
-      reinterpret_cast<char*>(alloc_func(array_offset + num * sizeof(ElementType)));
+    void* ptr = alloc_func(array_offset + num * sizeof(ElementType));
+    if (!ptr)
+        return nullptr;
+    char* raw_memory = reinterpret_cast<char*>(ptr);
     ASSERT_ALIGNED(raw_memory, alignof(T));
 
     new (raw_memory) size_t(num);

@@ -69,7 +69,8 @@ void* std_aligned_alloc(size_t alignment, size_t size) {
     return aligned_alloc(alignment, size);
 #elif defined(POSIXALIGNEDALLOC)
     void* mem = nullptr;
-    posix_memalign(&mem, alignment, size);
+    if (posix_memalign(&mem, alignment, size) != 0)
+        return nullptr;
     return mem;
 #elif defined(_WIN32) && !defined(_M_ARM) && !defined(_M_ARM64)
     return _mm_malloc(size, alignment);
@@ -135,6 +136,9 @@ void* aligned_large_pages_alloc(size_t allocSize) {
     // Round up to multiples of alignment
     size_t size = ((allocSize + alignment - 1) / alignment) * alignment;
     void*  mem  = std_aligned_alloc(alignment, size);
+    if (!mem)
+        return nullptr;
+
     #if defined(MADV_HUGEPAGE)
     madvise(mem, size, MADV_HUGEPAGE);
     #endif

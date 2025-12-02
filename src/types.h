@@ -167,6 +167,13 @@ constexpr Value VALUE_TB_LOSS_IN_MAX_PLY = -VALUE_TB_WIN_IN_MAX_PLY;
 
 constexpr bool is_valid(Value value) { return value != VALUE_NONE; }
 
+// Converts a Value to a centipawn value, handling mate/TB scores.
+inline int to_cp(Value v) {
+    if (std::abs(v) >= VALUE_TB_WIN_IN_MAX_PLY)
+        return v > 0 ? 20000 : -20000;
+    return int(v);
+}
+
 constexpr bool is_win(Value value) {
     assert(is_valid(value));
     return value >= VALUE_TB_WIN_IN_MAX_PLY;

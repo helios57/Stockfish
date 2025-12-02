@@ -36,7 +36,7 @@
 #include "movegen.h"
 #include "syzygy/tbprobe.h"
 #include "tt.h"
-#include "uci.h"
+#include "move_conversion.h"
 
 using std::string;
 
@@ -78,7 +78,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
        << std::setw(16) << pos.key() << std::setfill(' ') << std::dec << "\nCheckers: ";
 
     for (Bitboard b = pos.checkers(); b;)
-        os << UCIEngine::square(pop_lsb(b)) << " ";
+        os << square_to_string(pop_lsb(b)) << " ";
 
     if (Tablebases::MaxCardinality >= popcount(pos.pieces()) && !pos.can_castle(ANY_CASTLING))
     {
@@ -450,7 +450,7 @@ string Position::fen() const {
     if (!can_castle(ANY_CASTLING))
         ss << '-';
 
-    ss << (ep_square() == SQ_NONE ? " - " : " " + UCIEngine::square(ep_square()) + " ")
+    ss << (ep_square() == SQ_NONE ? " - " : " " + square_to_string(ep_square()) + " ")
        << st->rule50 << " " << 1 + (gamePly - (sideToMove == BLACK)) / 2;
 
     return ss.str();

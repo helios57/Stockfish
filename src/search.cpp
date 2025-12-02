@@ -47,8 +47,8 @@
 #include "timeman.h"
 #include "tt.h"
 #include "types.h"
-#include "uci.h"
-#include "ucioption.h"
+#include "option.h"
+#include "move_conversion.h"
 
 namespace Stockfish {
 
@@ -225,7 +225,7 @@ void Search::Worker::start_searching() {
 
     Worker* bestThread = this;
     Skill   skill =
-      Skill(options["Skill Level"], options["UCI_LimitStrength"] ? int(options["UCI_Elo"]) : 0);
+      Skill(options["Skill Level"], options["LimitStrength"] ? int(options["Elo"]) : 0);
 
     if (int(options["MultiPV"]) == 1 && !limits.depth && !limits.mate && !skill.enabled()
         && rootMoves[0].pv[0] != Move::none())
@@ -242,9 +242,9 @@ void Search::Worker::start_searching() {
 
     if (bestThread->rootMoves[0].pv.size() > 1
         || bestThread->rootMoves[0].extract_ponder_from_tt(tt, rootPos))
-        ponder = UCIEngine::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
-
-    auto bestmove = UCIEngine::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+        ponder = move_to_string(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
+    
+    auto bestmove = move_to_string(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
     main_manager()->updates.onBestmove(bestmove, ponder);
 }
 
@@ -295,7 +295,7 @@ void Search::Worker::iterative_deepening() {
     }
 
     size_t multiPV = size_t(options["MultiPV"]);
-    Skill skill(options["Skill Level"], options["UCI_LimitStrength"] ? int(options["UCI_Elo"]) : 0);
+    Skill skill(options["Skill Level"], options["LimitStrength"] ? int(options["Elo"]) : 0);
 
     // When playing with strength handicap enable MultiPV search that we will
     // use behind-the-scenes to retrieve a set of possible moves.
@@ -1021,7 +1021,7 @@ moves_loop:  // When in check, search starts here
         if (rootNode && is_mainthread() && nodes > 10000000)
         {
             main_manager()->updates.onIter(
-              {depth, UCIEngine::move(move, pos.is_chess960()), moveCount + pvIdx});
+              {depth, move_to_string(move, pos.is_chess960()), moveCount + pvIdx});
         }
         if (PvNode)
             (ss + 1)->pv = nullptr;
@@ -2133,13 +2133,13 @@ void SearchManager::pv(Search::Worker&           worker,
 
         std::string pv;
         for (Move m : rootMoves[i].pv)
-            pv += UCIEngine::move(m, pos.is_chess960()) + " ";
+            pv += move_to_string(m, pos.is_chess960()) + " ";
 
         // Remove last whitespace
         if (!pv.empty())
             pv.pop_back();
 
-        auto wdl   = worker.options["UCI_ShowWDL"] ? UCIEngine::wdl(v, pos) : "";
+        auto wdl   = "";
         auto bound = rootMoves[i].scoreLowerbound
                      ? "lowerbound"
                      : (rootMoves[i].scoreUpperbound ? "upperbound" : "");

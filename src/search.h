@@ -182,7 +182,7 @@ struct InfoIteration {
     size_t           currmovenumber;
 };
 
-// Skill structure is used to implement strength limit. If we have a UCI_Elo,
+// Skill structure is used to implement strength limit. If we have a Elo,
 // we convert it to an appropriate skill level, anchored to the Stash engine.
 // This method is based on a fit of the Elo results for games played between
 // Stockfish at various skill levels and various versions of the Stash engine.
@@ -193,10 +193,10 @@ struct Skill {
     constexpr static int LowestElo  = 1320;
     constexpr static int HighestElo = 3190;
 
-    Skill(int skill_level, int uci_elo) {
-        if (uci_elo)
+    Skill(int skill_level, int elo) {
+        if (elo)
         {
-            double e = double(uci_elo - LowestElo) / (HighestElo - LowestElo);
+            double e = double(elo - LowestElo) / (HighestElo - LowestElo);
             level = std::clamp((((37.2473 * e - 40.8525) * e + 22.2943) * e - 0.311438), 0.0, 19.0);
         }
         else

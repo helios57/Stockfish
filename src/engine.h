@@ -35,7 +35,8 @@
 #include "syzygy/tbprobe.h"  // for Stockfish::Depth
 #include "thread.h"
 #include "tt.h"
-#include "ucioption.h"
+#include "option.h"
+#include "move_conversion.h"
 
 namespace Stockfish {
 
@@ -66,6 +67,10 @@ class Engine {
     void wait_for_search_finished();
     // set a new position, moves are in UCI format
     void set_position(const std::string& fen, const std::vector<std::string>& moves);
+
+    // incremental updates
+    void reset();
+    void apply_move(const std::string& move_str);
 
     // modifiers
 
