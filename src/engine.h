@@ -112,6 +112,8 @@ class Engine {
     std::string                            thread_allocation_information_as_string() const;
     std::string                            thread_binding_information_as_string() const;
 
+    friend class PonderTest;
+
    private:
     const std::string binaryDirectory;
 
