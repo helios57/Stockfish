@@ -63,7 +63,8 @@ Engine::Engine(std::optional<std::string> path) :
         std::make_unique<NN::NetworkBig>(NN::EvalFile{EvalFileDefaultNameBig, "None", ""},
                                          NN::EmbeddedNNUEType::BIG),
         std::make_unique<NN::NetworkSmall>(NN::EvalFile{EvalFileDefaultNameSmall, "None", ""},
-                                           NN::EmbeddedNNUEType::SMALL))) {
+                                           NN::EmbeddedNNUEType::SMALL))),
+    network_verified(false) {
 
     pos.set(StartFEN, false, &states->back());
 
@@ -149,14 +150,20 @@ Engine::Engine(std::optional<std::string> path) :
 }
 
 std::uint64_t Engine::perft(const std::string& fen, Depth depth, bool isChess960) {
-    verify_networks();
+    if (!network_verified) {
+        verify_networks();
+        network_verified = true;
+    }
 
     return Benchmark::perft(fen, depth, isChess960);
 }
 
 void Engine::go(Search::LimitsType& limits) {
     assert(limits.perft == 0);
-    verify_networks();
+    if (!network_verified) {
+        verify_networks();
+        network_verified = true;
+    }
     std::cout << "Network verification complete. Starting threads..." << std::endl;
 
     threads.start_thinking(options, pos, states, limits);
@@ -341,7 +348,9 @@ void Engine::trace_eval() const {
     Position     p;
     p.set(pos.fen(), options["Chess960"], &trace_states->back());
 
-    verify_networks();
+    if (!network_verified) {
+        verify_networks();
+    }
 
     sync_cout << "\n" << Eval::trace(p, *networks) << sync_endl;
 }

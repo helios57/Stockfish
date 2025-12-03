@@ -7,6 +7,7 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
+#include <optional>
 
 #include <grpcpp/grpcpp.h>
 #include "chess_contest.grpc.pb.h"
@@ -39,7 +40,7 @@ private:
     std::unique_ptr<chess_contest::ChessGame::Stub> stub;
     
     // Engine instance
-    std::unique_ptr<Engine> engine;
+    std::optional<Engine> engine;
     
     // Stream for communication
     std::shared_ptr<grpc::ClientReaderWriter<chess_contest::ClientToServerMessage, chess_contest::ServerToClientMessage>> stream;

@@ -29,7 +29,7 @@ GrpcAgent::GrpcAgent(const AgentConfig& cfg) : config(cfg) {
     channel = grpc::CreateChannel(target, creds);
     stub = chess_contest::ChessGame::NewStub(channel);
     
-    engine = std::make_unique<Engine>();
+    engine.emplace();
     
     // Set callbacks
     engine->set_on_bestmove([this](std::string_view bestmove, std::string_view ponder) {
@@ -148,7 +148,7 @@ void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
     }
 
     std::cout << "Setting position..." << std::endl;
-    engine->reset();
+    engine->set_position(StartFEN, {});
     std::cout << "Game setup complete." << std::endl;
 }
 
@@ -197,6 +197,7 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
 
 void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) {
     std::string move_str(bestmove);
+    std::string ponder_str(ponder);
 
     std::lock_guard<std::mutex> lock(agent_mutex);
 
@@ -221,7 +222,7 @@ void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) 
         }
     }
 
-    std::cout << "Bestmove: " << move_str << std::endl;
+    std::cout << "Bestmove: " << move_str<< " Ponder:" << ponder_str << std::endl;
 }
 
 void GrpcAgent::handle_draw_offer(const chess_contest::DrawOfferEvent& msg) {
