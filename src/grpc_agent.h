@@ -34,6 +34,7 @@ private:
     void handle_error(const chess_contest::Error& msg);
 
     void on_bestmove(std::string_view bestmove, std::string_view ponder);
+    void start_ponder(std::string ponder_move);
 
     AgentConfig config;
     std::shared_ptr<grpc::Channel> channel;
@@ -56,6 +57,11 @@ private:
     std::vector<std::string> game_moves;
     int increment_ms;
     bool should_exit_stream;
+
+    // Pondering state
+    bool is_pondering = false;
+    bool is_searching_main = false;
+    std::string predicted_ponder_move;
 };
 
 } // namespace Stockfish
