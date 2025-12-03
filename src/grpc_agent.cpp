@@ -145,6 +145,8 @@ void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
         increment_ms = msg.increment_ms();
         game_moves.clear();
         active_search_game_id.clear();
+        is_pondering = false;
+        is_searching_main = false;
     }
 
     std::cout << "Setting position..." << std::endl;
@@ -162,7 +164,18 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
     int inc_ms;
 
     {
-        std::lock_guard<std::mutex> lock(agent_mutex);
+        std::unique_lock<std::mutex> lock(agent_mutex);
+
+        // STOP PONDERING if active
+        if (is_pondering) {
+            // Unlock to allow engine methods (which might block) to run
+            lock.unlock();
+            engine->stop();
+            engine->wait_for_search_finished();
+            lock.lock();
+            is_pondering = false;
+        }
+
         if (!opp_move.empty()) {
             game_moves.push_back(opp_move);
         }
@@ -172,6 +185,7 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
 
         // We set this here to allow on_bestmove to proceed when it fires
         active_search_game_id = current_game_id;
+        is_searching_main = true;
 
         // Update position safely inside lock
         // This ensures 'states' is recreated and valid for the next search
@@ -199,30 +213,76 @@ void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) 
     std::string move_str(bestmove);
     std::string ponder_str(ponder);
 
-    std::lock_guard<std::mutex> lock(agent_mutex);
+    {
+        std::lock_guard<std::mutex> lock(agent_mutex);
 
-    if (active_search_game_id != current_game_id || current_game_id.empty()) {
-         return;
+        // If we are not searching for the main move, this bestmove is likely
+        // the result of stopping a ponder search or an aborted search.
+        if (!is_searching_main) {
+            return;
+        }
+
+        is_searching_main = false;
+
+        if (active_search_game_id != current_game_id || current_game_id.empty()) {
+             return;
+        }
+
+        game_moves.push_back(move_str);
+
+        // Apply our move to the engine state incrementally
+        // Use set_position to ensure states is recreated (it was moved to threads during search)
+        engine->set_position(StartFEN, game_moves);
     }
-
-    game_moves.push_back(move_str);
-
-    // Apply our move to the engine state incrementally
-    // Use set_position to ensure states is recreated (it was moved to threads during search)
-    engine->set_position(StartFEN, game_moves);
 
     chess_contest::ClientToServerMessage req;
     auto resp = req.mutable_move_response();
     resp->set_game_id(current_game_id);
     resp->set_move_lan(move_str);
 
-    std::lock_guard<std::mutex> stream_lock(stream_mutex);
-    if (stream) {
-        if (!stream->Write(req)) {
+    {
+        std::lock_guard<std::mutex> stream_lock(stream_mutex);
+        if (stream) {
+            if (!stream->Write(req)) {
+                // handle error
+            }
         }
     }
 
     std::cout << "Bestmove: " << move_str<< " Ponder:" << ponder_str << std::endl;
+
+    if (!ponder_str.empty() && !should_exit_stream) {
+        std::thread([this, ponder_str]() {
+            this->start_ponder(ponder_str);
+        }).detach();
+    }
+}
+
+void GrpcAgent::start_ponder(std::string ponder_move) {
+    engine->wait_for_search_finished();
+
+    std::lock_guard<std::mutex> lock(agent_mutex);
+
+    if (is_searching_main) return;
+
+    if (active_search_game_id != current_game_id || current_game_id.empty()) return;
+    if (is_pondering) return;
+
+    std::cout << "Starting ponder on: " << ponder_move << std::endl;
+
+    is_pondering = true;
+    predicted_ponder_move = ponder_move;
+
+    std::vector<std::string> speculative_moves = game_moves;
+    speculative_moves.push_back(ponder_move);
+
+    engine->set_position(StartFEN, speculative_moves);
+
+    Search::LimitsType limits;
+    limits.ponderMode = true;
+    limits.infinite = 1;
+
+    engine->go(limits);
 }
 
 void GrpcAgent::handle_draw_offer(const chess_contest::DrawOfferEvent& msg) {
@@ -240,9 +300,14 @@ void GrpcAgent::handle_draw_offer(const chess_contest::DrawOfferEvent& msg) {
 
 void GrpcAgent::handle_game_over(const chess_contest::GameOver& msg) {
     std::cout << "Game Over: " << msg.result() << " Reason: " << msg.reason() << std::endl;
-    std::lock_guard<std::mutex> lock(agent_mutex);
+
+    // Stop engine outside lock to prevent deadlocks with on_bestmove
     engine->stop();
+
+    std::lock_guard<std::mutex> lock(agent_mutex);
     active_search_game_id.clear();
+    is_pondering = false;
+    is_searching_main = false;
     should_exit_stream = true;
 }
 
