@@ -1111,6 +1111,13 @@ grpc_agent.o: chess_contest.pb.cc chess_contest.grpc.pb.cc
 $(EXE): $(OBJS)
 	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)
 
+TEST_OBJS = $(COMMON_SRCS:.cpp=.o) test_ponder.o
+test_ponder.o: test_ponder.cpp
+	$(CXX) $(DEPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+unit_tests: $(TEST_OBJS)
+	+$(CXX) -o $@ $(TEST_OBJS) $(LDFLAGS)
+
 # Force recompilation to ensure version info is up-to-date
 misc.o: FORCE
 FORCE:
