@@ -311,11 +311,23 @@ void GrpcAgent::handle_game_over(const chess_contest::GameOver& msg) {
     // Stop engine outside lock to prevent deadlocks with on_bestmove
     engine->stop();
 
-    std::lock_guard<std::mutex> lock(agent_mutex);
-    active_search_game_id.clear();
-    is_pondering = false;
-    is_searching_main = false;
-    should_exit_stream = true;
+    {
+        std::lock_guard<std::mutex> lock(agent_mutex);
+        active_search_game_id.clear();
+        is_pondering = false;
+        is_searching_main = false;
+        should_exit_stream = true;
+    }
+
+    // Signal that we are done writing. This should cause the server to close
+    // the stream, which in turn will make stream->Read() return false,
+    // unblocking the message loop.
+    {
+        std::lock_guard<std::mutex> lock(stream_mutex);
+        if (stream) {
+            stream->WritesDone();
+        }
+    }
 }
 
 void GrpcAgent::handle_error(const chess_contest::Error& msg) {
