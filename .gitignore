@@ -17,3 +17,4 @@ tests/syzygy
 tests/bench_tmp.epd
 agent.env
 .idea
+/src/chess_contest.*.*
