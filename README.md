@@ -86,10 +86,23 @@ Configuration is loaded from `agent.env` or environment variables. You can speci
 *   `SERVER_PORT`: Port number (default: `443`).
 *   `USE_TLS`: Enable TLS/SSL connection (default: `true`).
 *   `GAME_MODE`: Game mode, e.g. `TRAINING`, `RANKED`, `OPEN` (default: `TRAINING`).
-*   `TIME_CONTROL`: Time control for challenges, e.g. `180+2` (default: `180+2`).
+*   `TIME_CONTROL`: Time control for challenges, e.g. `180+2` (default: `300+0`).
 *   `WAIT_FOR_CHALLENGE`: Set to `true` to wait for a challenge instead of auto-matching (default: `false`).
 *   `SPECIFIC_OPPONENT_AGENT_ID`: If set, challenge this specific agent ID (default: empty).
 *   `AUTO_ACCEPT_DRAW`: Set to `true` to automatically accept draw offers (default: `false`).
+
+#### Engine Strength Options
+
+*   `SKILL_LEVEL`: Skill level from 0 (weakest) to 20 (strongest) (default: `20`).
+*   `LIMIT_STRENGTH`: Set to `true` to limit playing strength to a specific Elo rating (default: `false`).
+*   `ELO`: Target Elo rating when `LIMIT_STRENGTH` is enabled (default: `1350`).
+
+#### Engine Performance Options
+
+*   `HASH`: Memory for hash tables in MB (default: `16`).
+*   `PONDER`: Set to `true` to think during opponent's time (default: `false`).
+*   `MULTI_PV`: Number of principal variations to calculate (default: `1`).
+*   `THREADS`: Number of CPU threads to use for searching (default: `1`).
 
 ### Compiling from Source
 

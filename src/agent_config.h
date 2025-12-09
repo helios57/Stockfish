@@ -16,6 +16,13 @@ struct AgentConfig {
     bool wait_for_challenge;
     std::string specific_opponent_agent_id;
     bool auto_accept_draw;
+    int skill_level;
+    bool limit_strength;
+    int elo;
+    int hash;
+    bool ponder;
+    int multi_pv;
+    int threads;
 
     static AgentConfig load();
 };

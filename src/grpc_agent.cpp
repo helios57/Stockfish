@@ -7,6 +7,7 @@
 #include "search.h"
 #include "types.h"
 #include "misc.h"
+#include "option.h"
 
 namespace Stockfish {
 
@@ -30,7 +31,15 @@ GrpcAgent::GrpcAgent(const AgentConfig& cfg) : config(cfg) {
     stub = chess_contest::ChessGame::NewStub(channel);
     
     engine.emplace();
-    
+    // Set engine options from config
+    engine->get_options()["Skill Level"] = std::to_string(config.skill_level);
+    engine->get_options()["LimitStrength"] = config.limit_strength ? std::string("true") : std::string("false");
+    engine->get_options()["Elo"] = std::to_string(config.elo);
+    engine->get_options()["Hash"] = std::to_string(config.hash);
+    engine->get_options()["Ponder"] = config.ponder ? std::string("true") : std::string("false");
+    engine->get_options()["MultiPV"] = std::to_string(config.multi_pv);
+    engine->get_options()["Threads"] = std::to_string(config.threads);
+
     // Set callbacks
     engine->set_on_bestmove([this](std::string_view bestmove, std::string_view ponder) {
         this->on_bestmove(bestmove, ponder);

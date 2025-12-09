@@ -64,6 +64,12 @@ const Option& OptionsMap::operator[](const std::string& name) const {
     return it->second;
 }
 
+Option& OptionsMap::operator[](const std::string& name) {
+    auto it = options_map.find(name);
+    assert(it != options_map.end());
+    return it->second;
+}
+
 // Inits options and assigns idx in the correct printing order
 void OptionsMap::add(const std::string& name, const Option& option) {
     if (!options_map.count(name))

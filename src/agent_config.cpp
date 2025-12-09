@@ -83,10 +83,21 @@ AgentConfig AgentConfig::load() {
     // Uppercase game mode
     std::transform(config.game_mode.begin(), config.game_mode.end(), config.game_mode.begin(), ::toupper);
     
-    config.time_control = get("TIME_CONTROL", "180+2");
+    config.time_control = get("TIME_CONTROL", "300+0");
     config.wait_for_challenge = to_bool(get("WAIT_FOR_CHALLENGE", "false"));
     config.specific_opponent_agent_id = get("SPECIFIC_OPPONENT_AGENT_ID", "");
     config.auto_accept_draw = to_bool(get("AUTO_ACCEPT_DRAW", "false"));
+
+    // Engine strength options
+    config.skill_level = std::atoi(get("SKILL_LEVEL", "20").c_str());
+    config.limit_strength = to_bool(get("LIMIT_STRENGTH", "false"));
+    config.elo = std::atoi(get("ELO", "1350").c_str());
+
+    // Engine performance options
+    config.hash = std::atoi(get("HASH", "16").c_str());
+    config.ponder = to_bool(get("PONDER", "false"));
+    config.multi_pv = std::atoi(get("MULTI_PV", "1").c_str());
+    config.threads = std::atoi(get("THREADS", "1").c_str());
 
     return config;
 }
