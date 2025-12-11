@@ -30,6 +30,6 @@ ENV USE_TLS=true \
     SERVER_PORT=443
 
 # Make the entrypoint script executable
-RUN chmod +x ./scripts/entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
-ENTRYPOINT ["./scripts/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
