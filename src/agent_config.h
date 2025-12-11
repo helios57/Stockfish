@@ -24,6 +24,10 @@ struct AgentConfig {
     int multi_pv;
     int threads;
 
+    // Defensive time management settings
+    double time_usage_multiplier; // e.g., 0.9 to use only 90% of available time
+    int time_safety_margin_ms;    // e.g., 500 to reserve 500ms as buffer
+
     static AgentConfig load();
 };
 

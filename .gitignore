@@ -21,6 +21,6 @@ agent.env
 src/unit_tests
 unit_tests
 src/test_ponder.o
-src/unit_tests
 *.log
 *.txt
+/agent*.env

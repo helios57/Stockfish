@@ -64,7 +64,7 @@ message JoinRequest {
   // REQUIRED: The time control for the game.
   // e.g., "180+2" for 3 minutes + 2s increment
   string time_control = 3;
-  // OPTIONAL: For TRAINING mode, challenge a specific agent_id from the waiting list.
+  // OPTIONAL: For TRAINING mode, challenge a specific agent by name from the waiting list.
   // If set, `wait_for_challenge` must be false.
   string specific_opponent_agent_id = 4;
   // OPTIONAL: For TRAINING mode, wait to be challenged instead of auto-matching.
@@ -73,6 +73,10 @@ message JoinRequest {
   // OPTIONAL: The name of this agent. Allows multiple agents with different names
   // to run under the same API key.
   string agent_name = 6;
+  // OPTIONAL: An arbitrary string to prevent agents of the same group from matching.
+  optional string agent_group = 7;
+  // OPTIONAL: The ID of a game to reconnect to.
+  string game_id = 8;
 }
 
 // A response containing the agent's chosen move.

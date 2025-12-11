@@ -167,6 +167,16 @@ void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
 
     std::cout << "Setting position..." << std::endl;
     engine->set_position(StartFEN, {});
+    
+    // Preheat engine: warm up neural networks and search structures
+    std::cout << "Preheating engine..." << std::endl;
+    Search::LimitsType preheat_limits;
+    preheat_limits.depth = 6;  // Quick shallow search to initialize caches
+    preheat_limits.startTime = now();
+    engine->go(preheat_limits);
+    engine->wait_for_search_finished();
+    std::cout << "Engine preheated and ready." << std::endl;
+    
     std::cout << "Game setup complete." << std::endl;
 }
 
@@ -215,8 +225,33 @@ void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
     Color us = (color == "WHITE") ? WHITE : BLACK;
     Color them = ~us;
 
-    limits.time[us] = msg.your_remaining_time_ms();
-    limits.time[them] = msg.opponent_remaining_time_ms();
+    // --- IMPLEMENTATION OF DEFENSIVE TIME MANAGEMENT ---
+    
+    // 1. Get the actual time reported by the server
+    int64_t actual_time_ms = msg.your_remaining_time_ms();
+    
+    // 2. Apply static safety margin (reserve X ms)
+    int64_t defensive_time = actual_time_ms - config.time_safety_margin_ms;
+    
+    // 3. Apply usage multiplier (scale down by percentage)
+    if (config.time_usage_multiplier > 0.0) {
+        defensive_time = static_cast<int64_t>(defensive_time * config.time_usage_multiplier);
+    }
+
+    // 4. Hard floor to prevent passing 0 or negative time which might confuse the engine
+    //    (Minimum 100ms or actual time if very low)
+    if (defensive_time < 100) {
+        defensive_time = std::max<int64_t>(10, actual_time_ms - 50); // Last resort panic time
+    }
+
+    std::cout << "Time Management: Server=" << actual_time_ms 
+              << "ms, Defensive=" << defensive_time 
+              << "ms (Margin=" << config.time_safety_margin_ms 
+              << ", Mult=" << config.time_usage_multiplier << ")" << std::endl;
+
+    // 5. Pass the defensive time to the engine
+    limits.time[us] = defensive_time;
+    limits.time[them] = msg.opponent_remaining_time_ms(); // Opponent time doesn't strictly matter for our allocation
     limits.inc[us] = inc_ms;
     limits.inc[them] = inc_ms;
 

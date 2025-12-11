@@ -99,6 +99,14 @@ AgentConfig AgentConfig::load() {
     config.multi_pv = std::atoi(get("MULTI_PV", "1").c_str());
     config.threads = std::atoi(get("THREADS", "1").c_str());
 
+    // Defensive Time Management
+    // Default to 1.0 (100%) if not set. Recommended for Blitz 5+0: 0.90 or 0.95
+    std::string usage_mult_str = get("TIME_USAGE_MULTIPLIER", "1.0");
+    config.time_usage_multiplier = std::stod(usage_mult_str);
+
+    // Default to 0ms. Recommended for Blitz 5+0: 100 or 500 to account for network/GC lags
+    config.time_safety_margin_ms = std::atoi(get("TIME_SAFETY_MARGIN_MS", "0").c_str());
+
     return config;
 }
 
