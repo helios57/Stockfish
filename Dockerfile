@@ -39,7 +39,6 @@ WORKDIR /app
 
 COPY --from=builder /build/src/stockfish /app/stockfish
 COPY --from=builder /build/src/*.nnue /app/
-COPY agent.env ./
 
 # Default runtime environment can be overridden
 ENV USE_TLS=true \
