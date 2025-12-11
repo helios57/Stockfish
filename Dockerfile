@@ -29,21 +29,7 @@ COPY . .
 ENV USE_TLS=true \
     SERVER_PORT=443
 
-# Create an entrypoint script that will build and run Stockfish.
-# Using a RUN command with a "here document" is a clean way to create the script
-# without adding a file to your local project.
-RUN <<EOF > ./entrypoint.sh
-#!/bin/bash
-set -e
-echo "Building Stockfish with native optimizations for this system..."
-# The 'profile-build' target uses profile-guided optimization for best performance
-# and automatically detects the host architecture.
-make -j\$(nproc) -C src profile-build
-echo "Build complete. Starting Stockfish..."
-./src/stockfish
-EOF
-
 # Make the entrypoint script executable
-RUN chmod +x ./entrypoint.sh
+RUN chmod +x ./scripts/entrypoint.sh
 
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["./scripts/entrypoint.sh"]
