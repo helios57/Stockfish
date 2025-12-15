@@ -36,6 +36,9 @@ message WaitingAgent {
   string agent_id = 1;   // The unique ID of the agent (e.g., their connection ID).
   string agent_name = 2; // The human-readable name of the agent (from their user profile).
   int32 rating = 3;      // The agent's current rating.
+  string game_mode = 4;  // The game mode the agent is waiting for.
+  string time_control = 5; // The time control the agent is waiting for.
+  optional string agent_group = 6; // The agent group (if any).
 }
 
 // ===============================================
@@ -175,4 +178,40 @@ message Error {
 message DrawOfferEvent {
   // REQUIRED: The ID of the game where the draw is offered.
   string game_id = 1;
+}
+
+// ===============================================
+// Bot Provisioning Service
+// ===============================================
+
+service BotProvisioning {
+  rpc RegisterProvisioner(stream ProvisionerMessage) returns (stream ProvisionerInstruction);
+}
+
+message ProvisionerMessage {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    READY = 1;
+    BUSY = 2;
+    ERROR = 3;
+  }
+  Status status = 1;
+  int32 capacity = 2;
+}
+
+message ProvisionerInstruction {
+  enum InstructionType {
+    INSTRUCTION_TYPE_UNSPECIFIED = 0;
+    SPAWN_BOT = 1;
+  }
+  string instruction_id = 1;
+  InstructionType type = 2;
+  SpawnBotRequest payload = 3;
+}
+
+message SpawnBotRequest {
+  string match_id = 1;
+  int32 target_elo = 2;
+  string time_control = 3;
+  optional string fen = 4;
 }
