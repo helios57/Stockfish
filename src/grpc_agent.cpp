@@ -39,6 +39,15 @@ GrpcAgent::GrpcAgent(const AgentConfig& cfg) : config(cfg) {
     engine->get_options()["Ponder"] = config.ponder ? std::string("true") : std::string("false");
     engine->get_options()["MultiPV"] = std::to_string(config.multi_pv);
     engine->get_options()["Threads"] = std::to_string(config.threads);
+    
+    std::cout << "Engine configuration:\n"
+              << "  Skill Level: " << config.skill_level << "\n"
+              << "  Limit Strength: " << (config.limit_strength ? "true" : "false") << "\n"
+              << "  ELO: " << config.elo << "\n"
+              << "  Hash: " << config.hash << " MB\n"
+              << "  Ponder: " << (config.ponder ? "true" : "false") << "\n"
+              << "  MultiPV: " << config.multi_pv << "\n"
+              << "  Threads: " << config.threads << std::endl;
 
     // Set callbacks
     engine->set_on_bestmove([this](std::string_view bestmove, std::string_view ponder) {
@@ -81,6 +90,16 @@ void GrpcAgent::start() {
         if (!config.specific_opponent_agent_id.empty()) {
             join->set_specific_opponent_agent_id(config.specific_opponent_agent_id);
         }
+        
+        std::cout << "Sending JoinRequest with the following parameters:\n"
+                  << "  api_key: " << (config.api_key.empty() ? "[not set]" : "[set]") << "\n"
+                  << "  agent_name: " << config.agent_name << "\n"
+                  << "  agent_group: " << (config.agent_group.empty() ? "[not set]" : config.agent_group) << "\n"
+                  << "  game_mode: " << config.game_mode << "\n"
+                  << "  time_control: " << config.time_control << "\n"
+                  << "  wait_for_challenge: " << (config.wait_for_challenge ? "true" : "false") << "\n"
+                  << "  specific_opponent_agent_id: " << (config.specific_opponent_agent_id.empty() ? "[not set]" : config.specific_opponent_agent_id) << "\n"
+                  << "  use_tls: " << (config.use_tls ? "true" : "false") << std::endl;
         
         bool success = false;
         {

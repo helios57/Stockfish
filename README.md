@@ -82,6 +82,7 @@ Configuration is loaded from `agent.env` or environment variables. You can speci
 
 *   `API_KEY`: **Required**. Your unique API key.
 *   `AGENT_NAME`: Name of the agent visible to opponents (default: `StockfishAgent`).
+*   `AGENT_GROUP`: Optional group name for the agent in server connection (default: empty).
 *   `SERVER`: The game server hostname (default: `localhost`).
 *   `SERVER_PORT`: Port number (default: `443`).
 *   `USE_TLS`: Enable TLS/SSL connection (default: `true`).
