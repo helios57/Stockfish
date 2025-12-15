@@ -59,7 +59,7 @@ COMMON_SRCS = bitboard.cpp evaluate.cpp \
 	search.cpp thread.cpp timeman.cpp tt.cpp move_conversion.cpp option.cpp tune.cpp syzygy/tbprobe.cpp \
 	nnue/nnue_accumulator.cpp nnue/nnue_misc.cpp nnue/network.cpp \
 	nnue/features/half_ka_v2_hm.cpp nnue/features/full_threats.cpp \
-	engine.cpp score.cpp memory.cpp agent_config.cpp grpc_agent.cpp $(GRPC_SRCS)
+	engine.cpp score.cpp memory.cpp agent_config.cpp grpc_agent.cpp provisioner_agent.cpp $(GRPC_SRCS)
 
 SRCS = $(COMMON_SRCS) main_grpc.cpp
 
@@ -1106,6 +1106,8 @@ chess_contest.pb.cc chess_contest.grpc.pb.cc: ../chess_contest.proto
 	protoc -I.. --cpp_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$(which grpc_cpp_plugin) ../chess_contest.proto
 
 grpc_agent.o: chess_contest.pb.cc chess_contest.grpc.pb.cc
+
+provisioner_agent.o: chess_contest.pb.cc chess_contest.grpc.pb.cc
 
 
 $(EXE): $(OBJS)

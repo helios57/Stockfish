@@ -31,13 +31,13 @@ std::string trim(const std::string& str) {
 
 } // namespace
 
-AgentConfig AgentConfig::load(const char* env_file_path) {
+AgentConfig AgentConfig::load(int argc, char* argv[]) {
     std::map<std::string, std::string> file_values;
     
-    // Determine env file path
+    // Determine env file path from first argument (if not a flag)
     std::string env_file;
-    if (env_file_path) {
-        env_file = env_file_path;
+    if (argc > 1 && argv[1][0] != '-') {
+        env_file = argv[1];
     } else {
         env_file = get_env_or("ENV_FILE", "agent.env");
     }
@@ -112,6 +112,31 @@ AgentConfig AgentConfig::load(const char* env_file_path) {
 
     // Default to 0ms. Recommended for Blitz 5+0: 100 or 500 to account for network/GC lags
     config.time_safety_margin_ms = std::atoi(get("TIME_SAFETY_MARGIN_MS", "0").c_str());
+
+    // Initialize provisioner mode fields with defaults
+    config.provisioner_mode = false;
+    config.target_game_id = "";
+    config.overridden_elo = -1;
+
+    // Parse command-line arguments to override configuration
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        
+        if (arg == "--provisioner") {
+            config.provisioner_mode = true;
+        }
+        else if (arg == "--game-id" && i + 1 < argc) {
+            config.target_game_id = argv[++i];
+        }
+        else if (arg == "--elo" && i + 1 < argc) {
+            config.overridden_elo = std::atoi(argv[++i]);
+            config.elo = config.overridden_elo; // Also update the elo field
+            config.agent_name = "Stockfish-" + std::to_string(config.elo); // Set agent name based on ELO
+        }
+        else if (arg == "--api-key" && i + 1 < argc) {
+            config.api_key = argv[++i];
+        }
+    }
 
     return config;
 }

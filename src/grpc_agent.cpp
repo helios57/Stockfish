@@ -71,7 +71,10 @@ GrpcAgent::~GrpcAgent() {
 void GrpcAgent::start() {
     // Loop for reconnection
     while (true) {
-        std::cout << "Connecting to " << config.server << ":" << config.server_port << " (group: " << config.agent_group << ")..." << std::endl;
+        std::cout << "\n[CONNECTION] Connecting to server:\n"
+                  << "  server: " << config.server << ":" << config.server_port << "\n"
+                  << "  agent_group: " << (config.agent_group.empty() ? "[not set]" : config.agent_group) << "\n"
+                  << "  use_tls: " << (config.use_tls ? "true" : "false") << std::endl;
         
         grpc::ClientContext context;
         stream = stub->PlayGame(&context);
@@ -86,20 +89,28 @@ void GrpcAgent::start() {
         if (!config.agent_group.empty()) {
             join->set_agent_group(config.agent_group);
         }
-        join->set_wait_for_challenge(config.wait_for_challenge);
+        
+        // Check if target_game_id is set (for direct join to a specific game)
+        if (!config.target_game_id.empty()) {
+            join->set_game_id(config.target_game_id);
+            join->set_wait_for_challenge(false);  // Must be false when joining a specific game
+        } else {
+            join->set_wait_for_challenge(config.wait_for_challenge);
+        }
+        
         if (!config.specific_opponent_agent_id.empty()) {
             join->set_specific_opponent_agent_id(config.specific_opponent_agent_id);
         }
         
-        std::cout << "Sending JoinRequest with the following parameters:\n"
+        std::cout << "\n[AGENT SEND] JoinRequest:\n"
                   << "  api_key: " << (config.api_key.empty() ? "[not set]" : "[set]") << "\n"
                   << "  agent_name: " << config.agent_name << "\n"
                   << "  agent_group: " << (config.agent_group.empty() ? "[not set]" : config.agent_group) << "\n"
                   << "  game_mode: " << config.game_mode << "\n"
                   << "  time_control: " << config.time_control << "\n"
-                  << "  wait_for_challenge: " << (config.wait_for_challenge ? "true" : "false") << "\n"
-                  << "  specific_opponent_agent_id: " << (config.specific_opponent_agent_id.empty() ? "[not set]" : config.specific_opponent_agent_id) << "\n"
-                  << "  use_tls: " << (config.use_tls ? "true" : "false") << std::endl;
+                  << "  game_id: " << (config.target_game_id.empty() ? "[not set]" : config.target_game_id) << "\n"
+                  << "  wait_for_challenge: " << (!config.target_game_id.empty() ? "false (forced)" : (config.wait_for_challenge ? "true" : "false")) << "\n"
+                  << "  specific_opponent_agent_id: " << (config.specific_opponent_agent_id.empty() ? "[not set]" : config.specific_opponent_agent_id) << std::endl;
         
         bool success = false;
         {
@@ -166,9 +177,12 @@ void GrpcAgent::handle_server_message(const chess_contest::ServerToClientMessage
 }
 
 void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
-    std::cout << "Game started: " << msg.game_id()
-              << " vs " << msg.opponent_name()
-              << " (Color: " << msg.color() << ")" << std::endl;
+    std::cout << "\n[AGENT RECV] GameStarted:\n"
+              << "  game_id: " << msg.game_id() << "\n"
+              << "  color: " << msg.color() << "\n"
+              << "  initial_time_ms: " << msg.initial_time_ms() << "\n"
+              << "  increment_ms: " << msg.increment_ms() << "\n"
+              << "  opponent_name: " << msg.opponent_name() << std::endl;
 
     // Stop and clear engine outside the lock to avoid deadlock
     std::cout << "Stopping engine..." << std::endl;
@@ -204,8 +218,10 @@ void GrpcAgent::handle_game_started(const chess_contest::GameStarted& msg) {
 
 void GrpcAgent::handle_move_request(const chess_contest::MoveRequest& msg) {
     std::string opp_move = msg.opponent_move_lan();
-    std::cout << "Received MoveRequest. Opponent move: " << (opp_move.empty() ? "none" : opp_move)
-              << " Time left: " << msg.your_remaining_time_ms() << "ms" << std::endl;
+    std::cout << "\n[AGENT RECV] MoveRequest:\n"
+              << "  opponent_move_lan: " << (opp_move.empty() ? "[none - first move]" : opp_move) << "\n"
+              << "  your_remaining_time_ms: " << msg.your_remaining_time_ms() << "\n"
+              << "  opponent_remaining_time_ms: " << msg.opponent_remaining_time_ms() << std::endl;
 
     std::string game_id;
     std::string color;
@@ -313,16 +329,20 @@ void GrpcAgent::on_bestmove(std::string_view bestmove, std::string_view ponder) 
     resp->set_game_id(current_game_id);
     resp->set_move_lan(move_str);
 
+    std::cout << "\n[AGENT SEND] MoveResponse:\n"
+              << "  game_id: " << current_game_id << "\n"
+              << "  move_lan: " << move_str << std::endl;
+
     {
         std::lock_guard<std::mutex> stream_lock(stream_mutex);
         if (stream) {
             if (!stream->Write(req)) {
-                // handle error
+                std::cerr << "Failed to send MoveResponse." << std::endl;
             }
         }
     }
 
-    std::cout << "Bestmove: " << move_str<< " Ponder:" << ponder_str << std::endl;
+    std::cout << "Bestmove: " << move_str << " Ponder: " << ponder_str << std::endl;
 
     if (!ponder_str.empty() && !should_exit_stream) {
         std::thread([this, ponder_str]() {
@@ -359,20 +379,29 @@ void GrpcAgent::start_ponder(std::string ponder_move) {
 }
 
 void GrpcAgent::handle_draw_offer(const chess_contest::DrawOfferEvent& msg) {
+    std::cout << "\n[AGENT RECV] DrawOfferEvent:\n"
+              << "  game_id: " << msg.game_id() << std::endl;
+    
     if (config.auto_accept_draw) {
         chess_contest::ClientToServerMessage req;
         auto resp = req.mutable_draw_offer_response();
         resp->set_game_id(msg.game_id());
         resp->set_accepted(true);
 
+        std::cout << "\n[AGENT SEND] DrawOfferResponse:\n"
+                  << "  game_id: " << msg.game_id() << "\n"
+                  << "  accepted: true" << std::endl;
+
         std::lock_guard<std::mutex> lock(stream_mutex);
         if (stream) stream->Write(req);
-        std::cout << "Auto-accepted draw offer." << std::endl;
     }
 }
 
 void GrpcAgent::handle_game_over(const chess_contest::GameOver& msg) {
-    std::cout << "Game Over: " << msg.result() << " Reason: " << msg.reason() << std::endl;
+    std::cout << "\n[AGENT RECV] GameOver:\n"
+              << "  result: " << msg.result() << "\n"
+              << "  reason: " << msg.reason() << "\n"
+              << "  final_pgn: " << msg.final_pgn() << std::endl;
 
     // Stop engine outside lock to prevent deadlocks with on_bestmove
     engine->stop();
@@ -397,6 +426,8 @@ void GrpcAgent::handle_game_over(const chess_contest::GameOver& msg) {
 }
 
 void GrpcAgent::handle_error(const chess_contest::Error& msg) {
+    std::cout << "\n[AGENT RECV] Error:\n"
+              << "  message: " << msg.message() << std::endl;
 }
 
 } // namespace Stockfish

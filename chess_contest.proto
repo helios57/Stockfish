@@ -197,6 +197,7 @@ message ProvisionerMessage {
   }
   Status status = 1;
   int32 capacity = 2;
+  string api_key = 3;
 }
 
 message ProvisionerInstruction {
