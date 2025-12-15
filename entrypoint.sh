@@ -11,4 +11,4 @@ echo "Building Stockfish with native optimizations for this system..."
 
 
 echo "Build complete. Starting Stockfish..."
-./src/stockfish
+./src/stockfish "$@"

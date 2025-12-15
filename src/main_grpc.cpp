@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
     Position::init();
     Eval::NNUE::Features::init_threat_offsets();
 
-    AgentConfig config = AgentConfig::load();
+    AgentConfig config = AgentConfig::load(argc > 1 ? argv[1] : nullptr);
     
     GrpcAgent agent(config);
     agent.start(); // This blocks

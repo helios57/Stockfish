@@ -8,6 +8,7 @@ namespace Stockfish {
 struct AgentConfig {
     std::string api_key;
     std::string agent_name;
+    std::string agent_group;
     std::string server;
     int server_port;
     bool use_tls;
@@ -28,7 +29,7 @@ struct AgentConfig {
     double time_usage_multiplier; // e.g., 0.9 to use only 90% of available time
     int time_safety_margin_ms;    // e.g., 500 to reserve 500ms as buffer
 
-    static AgentConfig load();
+    static AgentConfig load(const char* env_file_path = nullptr);
 };
 
 } // namespace Stockfish

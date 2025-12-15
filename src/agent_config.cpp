@@ -31,11 +31,16 @@ std::string trim(const std::string& str) {
 
 } // namespace
 
-AgentConfig AgentConfig::load() {
+AgentConfig AgentConfig::load(const char* env_file_path) {
     std::map<std::string, std::string> file_values;
     
     // Determine env file path
-    std::string env_file = get_env_or("ENV_FILE", "agent.env");
+    std::string env_file;
+    if (env_file_path) {
+        env_file = env_file_path;
+    } else {
+        env_file = get_env_or("ENV_FILE", "agent.env");
+    }
     
     // Try to open file
     std::ifstream infile(env_file);
@@ -65,11 +70,12 @@ AgentConfig AgentConfig::load() {
     config.api_key = get("API_KEY", "");
     
     if (config.api_key.empty()) {
-        std::cerr << "Error: API_KEY missing in agent.env or environment" << std::endl;
+        std::cerr << "Error: API_KEY missing in " << env_file << " or environment" << std::endl;
         exit(1);
     }
 
     config.agent_name = get("AGENT_NAME", "StockfishAgent");
+    config.agent_group = get("AGENT_GROUP", "");
     config.server = get("SERVER", "localhost");
     
     std::string port_str = get("SERVER_PORT", "443");

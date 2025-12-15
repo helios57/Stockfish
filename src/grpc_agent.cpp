@@ -62,7 +62,7 @@ GrpcAgent::~GrpcAgent() {
 void GrpcAgent::start() {
     // Loop for reconnection
     while (true) {
-        std::cout << "Connecting to " << config.server << ":" << config.server_port << "..." << std::endl;
+        std::cout << "Connecting to " << config.server << ":" << config.server_port << " (group: " << config.agent_group << ")..." << std::endl;
         
         grpc::ClientContext context;
         stream = stub->PlayGame(&context);
@@ -74,6 +74,9 @@ void GrpcAgent::start() {
         join->set_game_mode(config.game_mode);
         join->set_time_control(config.time_control);
         join->set_agent_name(config.agent_name);
+        if (!config.agent_group.empty()) {
+            join->set_agent_group(config.agent_group);
+        }
         join->set_wait_for_challenge(config.wait_for_challenge);
         if (!config.specific_opponent_agent_id.empty()) {
             join->set_specific_opponent_agent_id(config.specific_opponent_agent_id);
